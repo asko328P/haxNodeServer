@@ -42,8 +42,13 @@ HaxballJS().then((HBInit) => {
     room.setScoreLimit(3);
     room.setTimeLimit(3);
 
-    room.onRoomLink = function (link) {
+    room.onRoomLink = async (link) => {
         console.log(link);
+        await supabase
+            .from("game_links")
+            .insert({
+                game_link: link,
+            })
     };
 
     room.onPlayerJoin = function() {
