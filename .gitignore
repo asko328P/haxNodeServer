@@ -1,0 +1,4 @@
+# Project exclude paths
+/hax.js
+/node_modules/
+/.idea/
