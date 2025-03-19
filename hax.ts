@@ -91,7 +91,7 @@ HaxballJS().then((HBInit) => {
     room.onTeamVictory = async (scores: ScoresObject) => {
         await supabase
             .from('games')
-            .upsert({id: currentGameId, ended_at: new Date().toISOString(), winning_team_id: scores.red > scores.blue ? 0:1 })
+            .upsert({id: currentGameId, ended_at: new Date().toISOString(), winning_team_id: scores.red > scores.blue ? 1:2 })
 
         let game_player = []
 
