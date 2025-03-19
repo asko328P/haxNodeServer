@@ -51,8 +51,9 @@ HaxballJS().then((HBInit) => {
             })
     };
 
-    room.onPlayerJoin = function() {
+    room.onPlayerJoin = async (player: PlayerObject) => {
         updateAdmins();
+        await supabase.from("players").insert({id: player.name, name: player.name})
     }
 
     room.onPlayerLeave = function() {
