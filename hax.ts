@@ -64,12 +64,16 @@ HaxballJS().then((HBInit) => {
     let currentGameId = undefined
 
     room.onGameStart = async () => {
+        room.setTeamsLock(true)
         const { data, error } = await supabase
             .from('games')
             .insert({})
             .select()
 
         currentGameId = data[0].id;
+    }
+    room.onGameStop = () => {
+        room.setTeamsLock(false)
     }
 
     let lastKickedPlayer = undefined
@@ -80,13 +84,23 @@ HaxballJS().then((HBInit) => {
     room.onTeamGoal = async (team: TeamID) => {
         await supabase.from("players").insert({id: lastKickedPlayer.name, name: lastKickedPlayer.name})
         await supabase
+            .from('game_player')
+            .upsert({
+                game_id: currentGameId,
+                player_id: lastKickedPlayer.name,
+                team_id: lastKickedPlayer.team
+            })
+        const {data, error} = await supabase
             .from('goals')
             .insert({
                 game_id: currentGameId,
                 player_id: lastKickedPlayer.name,
                 goal_for_team_id: team,
-                is_own_goal: team !== lastKickedPlayer.team
+                is_own_goal: team !== lastKickedPlayer.team,
+                time: room.getScores().time
             })
+
+        console.log("goal data", data, "goal error", error)
     }
 
     room.onTeamVictory = async (scores: ScoresObject) => {
@@ -106,7 +120,7 @@ HaxballJS().then((HBInit) => {
 
         const {error} = await supabase
             .from('game_player')
-            .insert(game_player)
+            .upsert(game_player)
 
         console.log("game_player", error)
     }
