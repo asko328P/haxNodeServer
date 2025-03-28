@@ -2,7 +2,7 @@ const HaxballJS = require('haxball.js');
 const { createClient } = require('@supabase/supabase-js');
 require('dotenv').config()
 
-const GAME_TICK_DIVIDER = 60
+const GAME_TICK_DIVIDER = 20
 const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_ANON_KEY);
 
 
@@ -63,7 +63,9 @@ HaxballJS().then((HBInit) => {
     room.onGameTick = () => {
         tick += 1
         if(tick % GAME_TICK_DIVIDER === 0){
-            heatmap.push(room.getPlayerList())
+            if(room.getBallPosition().x !== 0 &&  room.getBallPosition().y !==0){
+                heatmap.push(room.getPlayerList())
+            }
         }
     }
 
