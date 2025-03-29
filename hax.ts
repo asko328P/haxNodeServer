@@ -94,8 +94,11 @@ HaxballJS().then((HBInit) => {
         room.setTeamsLock(false)
     }
 
+    let beforeLastKickedPlayer = undefined
     let lastKickedPlayer = undefined
     room.onPlayerBallKick = (player: PlayerObject) =>{
+        //swap the values
+        [beforeLastKickedPlayer, lastKickedPlayer]=[lastKickedPlayer, beforeLastKickedPlayer]
         lastKickedPlayer = player
     }
 
@@ -115,9 +118,12 @@ HaxballJS().then((HBInit) => {
                 player_id: lastKickedPlayer.name,
                 goal_for_team_id: team,
                 is_own_goal: team !== lastKickedPlayer.team,
-                time: room.getScores().time
+                time: room.getScores().time,
+                assist_player_id: (beforeLastKickedPlayer.team === team && beforeLastKickedPlayer.name !== lastKickedPlayer.name) ? beforeLastKickedPlayer.name : undefined
             })
 
+        beforeLastKickedPlayer = undefined
+        lastKickedPlayer = undefined
         console.log("goal data", data, "goal error", error)
     }
 
