@@ -100,10 +100,7 @@ HaxballJS().then((HBInit) => {
   let lastKickedPlayer = undefined;
   room.onPlayerBallKick = (player: PlayerObject) => {
     //swap the values
-    [beforeLastKickedPlayer, lastKickedPlayer] = [
-      lastKickedPlayer,
-      beforeLastKickedPlayer,
-    ];
+    beforeLastKickedPlayer = lastKickedPlayer;
     lastKickedPlayer = player;
   };
 
@@ -124,7 +121,8 @@ HaxballJS().then((HBInit) => {
       time: room.getScores().time,
 
       assist_player_id:
-        beforeLastKickedPlayer.team === team &&
+        beforeLastKickedPlayer?.team === team &&
+        lastKickedPlayer.team === team &&
         beforeLastKickedPlayer.name !== lastKickedPlayer.name
           ? beforeLastKickedPlayer.name
           : undefined,
@@ -143,14 +141,12 @@ HaxballJS().then((HBInit) => {
   };
 
   room.onTeamVictory = async (scores: ScoresObject) => {
-    await supabase
-      .from("games")
-      .upsert({
-        id: currentGameId,
-        ended_at: new Date().toISOString(),
-        winning_team_id: scores.red > scores.blue ? 1 : 2,
-        time: scores.time,
-      });
+    await supabase.from("games").upsert({
+      id: currentGameId,
+      ended_at: new Date().toISOString(),
+      winning_team_id: scores.red > scores.blue ? 1 : 2,
+      time: scores.time,
+    });
 
     let game_player = [];
 
