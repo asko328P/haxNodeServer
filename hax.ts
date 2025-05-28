@@ -31,7 +31,6 @@ HaxballJS().then((HBInit) => {
     roomName: "Misija",
     maxPlayers: 16,
     noPlayer: true, // Remove host player (recommended!)
-    // password: "Sarajevo123***",
     public: false,
     token: process.env.HAX_TOKEN, // Required
   });
