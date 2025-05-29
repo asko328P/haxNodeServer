@@ -1,6 +1,7 @@
 const HaxballJS = require("haxball.js");
 const { createClient } = require("@supabase/supabase-js");
 require("dotenv").config();
+const stringified2v2Stadium = require("./stadiums/twoveetwo");
 
 const GAME_TICK_DIVIDER = 10;
 const supabase = createClient(
@@ -35,7 +36,7 @@ HaxballJS().then((HBInit) => {
     token: process.env.HAX_TOKEN, // Required
   });
 
-  room.setDefaultStadium("Big");
+  room.setCustomStadium(stringified2v2Stadium);
   room.setScoreLimit(3);
   room.setTimeLimit(3);
 
