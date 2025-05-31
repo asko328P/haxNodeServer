@@ -3,7 +3,7 @@ const { createClient } = require("@supabase/supabase-js");
 require("dotenv").config();
 const stringified2v2Stadium = require("./stadiums/twoveetwo");
 
-const GAME_TICK_DIVIDER = 10;
+const GAME_TICK_DIVIDER = 5;
 const supabase = createClient(
   process.env.SUPABASE_URL,
   process.env.SUPABASE_ANON_KEY,
