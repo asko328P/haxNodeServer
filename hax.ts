@@ -1,7 +1,7 @@
 const HaxballJS = require("haxball.js");
 const { createClient } = require("@supabase/supabase-js");
 require("dotenv").config();
-const stringified2v2Stadium = require("./stadiums/twoveetwo");
+const { stringified2v2Stadium } = require("./stadiums/stadiums");
 
 const GAME_TICK_DIVIDER = 5;
 const supabase = createClient(
