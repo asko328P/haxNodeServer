@@ -1,3 +1,5 @@
+import { distance } from "./utility/utility";
+
 const HaxballJS = require("haxball.js");
 const { createClient } = require("@supabase/supabase-js");
 require("dotenv").config();
@@ -8,6 +10,8 @@ const supabase = createClient(
   process.env.SUPABASE_URL,
   process.env.SUPABASE_ANON_KEY,
 );
+const SHOT_SPEED_MULTIPLIER = 21;
+const SHOT_DISTANCE_MULTIPLIER = 0.1;
 
 HaxballJS().then((HBInit) => {
   // If there are no admins left in the room give admin to one of the remaining players.
@@ -59,9 +63,11 @@ HaxballJS().then((HBInit) => {
   };
 
   let tick = GAME_TICK_DIVIDER;
+  let ballPositionForSpeed = undefined;
 
   room.onGameTick = () => {
     tick += 1;
+    ballPositionForSpeed = room.getBallPosition();
     if (tick % GAME_TICK_DIVIDER === 0) {
       const ballPosition = room.getBallPosition();
       if (ballPosition.x !== 0 && ballPosition.y !== 0) {
@@ -105,9 +111,41 @@ HaxballJS().then((HBInit) => {
   };
 
   room.onTeamGoal = async (team: TeamID) => {
+    if (!lastKickedPlayer?.name) {
+      return;
+    }
+
+    const isOwnGoal = team !== lastKickedPlayer.team;
+
+    const currentBallPosition = room.getBallPosition();
+    const ballPositionDifference =
+      distance(
+        currentBallPosition.x,
+        currentBallPosition.y,
+        ballPositionForSpeed.x,
+        ballPositionForSpeed.y,
+      ) * SHOT_SPEED_MULTIPLIER;
+
+    const lastKickedPlayerDifference =
+      distance(
+        lastKickedPlayer.position.x,
+        lastKickedPlayer.position.y,
+        currentBallPosition.x,
+        currentBallPosition.y,
+      ) * SHOT_DISTANCE_MULTIPLIER;
+
+    const playerAnnouncement = `Goal by: ${lastKickedPlayer.name}`;
+    const ballSpeedAnnouncement = `Ball speed: ${ballPositionDifference.toFixed(0)} km/h; distance: ${lastKickedPlayerDifference.toFixed(0)} meters`;
+    room.sendAnnouncement(
+      playerAnnouncement,
+      undefined,
+      team === 1 ? 0xec3838 : 0x2a9ff8,
+    );
+    room.sendAnnouncement(ballSpeedAnnouncement, undefined, 0xffffff);
+
     await supabase
       .from("players")
-      .insert({ id: lastKickedPlayer.name, name: lastKickedPlayer.name });
+      .insert({ id: lastKickedPlayer?.name, name: lastKickedPlayer.name });
     await supabase.from("game_player").upsert({
       game_id: currentGameId,
       player_id: lastKickedPlayer.name,
@@ -117,7 +155,7 @@ HaxballJS().then((HBInit) => {
       game_id: currentGameId,
       player_id: lastKickedPlayer.name,
       goal_for_team_id: team,
-      is_own_goal: team !== lastKickedPlayer.team,
+      is_own_goal: isOwnGoal,
       time: room.getScores().time,
 
       assist_player_id:
@@ -168,5 +206,9 @@ HaxballJS().then((HBInit) => {
     });
 
     console.log("heatmapError", heatmapError);
+
+    room.sendAnnouncement(
+      `https://haxstats.expo.app/viewReplay?id=${currentGameId}`,
+    );
   };
 });
