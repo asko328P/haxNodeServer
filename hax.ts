@@ -6,12 +6,29 @@ require("dotenv").config();
 const { stringified2v2Stadium } = require("./stadiums/stadiums");
 
 const GAME_TICK_DIVIDER = 5;
-const supabase = createClient(
-  process.env.SUPABASE_URL,
-  process.env.SUPABASE_ANON_KEY,
-);
+
 const SHOT_SPEED_MULTIPLIER = 21;
 const SHOT_DISTANCE_MULTIPLIER = 0.1;
+
+const jwt = require("jsonwebtoken");
+
+const JWT_SECRET = process.env.LEGACY_JWT_SECRET; // You can find this in your Supabase project settings under API. Store this securely.
+const USER_ID = "6b08a887-5db1-465c-8f0a-d2518365a3e3"; // the user id that we want to give the manager role
+
+const token = jwt.sign({ role: "hax_server" }, JWT_SECRET, {
+  expiresIn: "1h",
+});
+
+const supabase = createClient(
+  process.env.SUPABASE_URL,
+  process.env.SUPABASE_SERVICE_KEY,
+  {
+    auth: {
+      autoRefreshToken: false,
+      persistSession: false,
+    },
+  },
+);
 
 HaxballJS().then((HBInit) => {
   // If there are no admins left in the room give admin to one of the remaining players.
