@@ -181,6 +181,9 @@ HaxballJS().then((HBInit) => {
         beforeLastKickedPlayer.name !== lastKickedPlayer.name
           ? beforeLastKickedPlayer.name
           : undefined,
+
+      goal_speed: ballPositionDifference,
+      goal_distance: lastKickedPlayerDifference,
     });
 
     beforeLastKickedPlayer = undefined;
