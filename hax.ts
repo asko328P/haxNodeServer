@@ -228,7 +228,7 @@ HaxballJS().then((HBInit) => {
     console.log("heatmapError", heatmapError);
 
     room.sendAnnouncement(
-      `https://haxstats.expo.app/viewReplay?id=${currentGameId}`,
+      `View replays and stats at: https://haxstats.expo.app/`,
     );
   };
 });
