@@ -1,23 +1,26 @@
-import { distance } from "./utility/utility";
+import {
+  angle,
+  checkIntersection,
+  distance,
+  rayIntersectsSegment,
+} from "./utility/utility";
 
 const HaxballJS = require("haxball.js");
 const { createClient } = require("@supabase/supabase-js");
 require("dotenv").config();
-const { stringified2v2Stadium } = require("./stadiums/stadiums");
+const {
+  stringified2v2Stadium,
+  getGoalForStadiumAndTeam,
+} = require("./stadiums/stadiums");
 
 const GAME_TICK_DIVIDER = 5;
 
 const SHOT_SPEED_MULTIPLIER = 21;
 const SHOT_DISTANCE_MULTIPLIER = 0.1;
 
-const jwt = require("jsonwebtoken");
-
-const JWT_SECRET = process.env.LEGACY_JWT_SECRET; // You can find this in your Supabase project settings under API. Store this securely.
-const USER_ID = "6b08a887-5db1-465c-8f0a-d2518365a3e3"; // the user id that we want to give the manager role
-
-const token = jwt.sign({ role: "hax_server" }, JWT_SECRET, {
-  expiresIn: "1h",
-});
+const KICKED_SPEED_THRESHOLD = 110;
+const EPSILON = 0.1;
+const GOALIE_TO_BALL_DISTANCE = 36;
 
 const supabase = createClient(
   process.env.SUPABASE_URL,
@@ -46,6 +49,52 @@ HaxballJS().then((HBInit) => {
 
     if (players.find((player) => player.admin) != null) return; // There's an admin left so do nothing.
     room.setPlayerAdmin(players[0].id, true); // Give admin to the first non admin player in the list
+  }
+
+  const getBallSpeed = () => {
+    if (!ballPositionForSpeed) {
+      return 0;
+    }
+    const currentBallPosition = room.getBallPosition();
+    return (
+      distance(
+        currentBallPosition.x,
+        currentBallPosition.y,
+        ballPositionForSpeed.x,
+        ballPositionForSpeed.y,
+      ) * SHOT_SPEED_MULTIPLIER
+    );
+  };
+
+  function getPlayerClosestToBall() {
+    const currentBallPosition = room.getBallPosition();
+    let closestPlayer: PlayerObject = room.getPlayerList()[0];
+
+    let closestDistance = distance(
+      closestPlayer.position.x,
+      closestPlayer.position.y,
+      currentBallPosition.x,
+      currentBallPosition.y,
+    );
+    room.getPlayerList().forEach((player: PlayerObject) => {
+      if (
+        distance(
+          player.position.x,
+          player.position.y,
+          currentBallPosition.x,
+          currentBallPosition.y,
+        ) < closestDistance
+      ) {
+        closestPlayer = player;
+        closestDistance = distance(
+          player.position.x,
+          player.position.y,
+          currentBallPosition.x,
+          currentBallPosition.y,
+        );
+      }
+    });
+    return closestPlayer;
   }
 
   // Same as in Haxball Headless Host Documentation
@@ -81,9 +130,126 @@ HaxballJS().then((HBInit) => {
 
   let tick = GAME_TICK_DIVIDER;
   let ballPositionForSpeed = undefined;
+  let isBallKicked = false;
+  let kickedAngle = undefined;
+  let kickedPosition = undefined;
 
-  room.onGameTick = () => {
+  room.onGameTick = async () => {
     tick += 1;
+
+    const currentBallPosition = room.getBallPosition();
+
+    if (getBallSpeed() > KICKED_SPEED_THRESHOLD && !isBallKicked) {
+      isBallKicked = true;
+      // room.sendAnnouncement(`ball is kicked!`);
+
+      kickedAngle = angle(
+        ballPositionForSpeed.x,
+        ballPositionForSpeed.y,
+        currentBallPosition.x,
+        currentBallPosition.y,
+      );
+      kickedPosition = currentBallPosition;
+    }
+
+    if (isBallKicked) {
+      let currentTrajectoryAngle = angle(
+        ballPositionForSpeed.x,
+        ballPositionForSpeed.y,
+        currentBallPosition.x,
+        currentBallPosition.y,
+      );
+      if (Math.abs(kickedAngle - currentTrajectoryAngle) > EPSILON) {
+        // room.sendAnnouncement(`ball changed trajectory`);
+
+        const closestPlayer = getPlayerClosestToBall();
+        const closestPlayerBallDistance = distance(
+          closestPlayer.position.x,
+          closestPlayer.position.y,
+          currentBallPosition.x,
+          currentBallPosition.y,
+        );
+
+        if (closestPlayerBallDistance < GOALIE_TO_BALL_DISTANCE) {
+          // room.sendAnnouncement(`closes player is ${closestPlayer.name}`);
+
+          isBallKicked = false;
+          //now we need to check whether the ball was going towards the goal. we got the kicked position and we got the kicked angle.
+          const playersOwnGoal = getGoalForStadiumAndTeam(
+            currentMapName,
+            closestPlayer.team === 1 ? "red" : "blue",
+          );
+          const goalFirstBar = {
+            x: playersOwnGoal.p0[0],
+            y: playersOwnGoal.p0[1],
+          };
+          const goalSecondBar = {
+            x: playersOwnGoal.p1[0],
+            y: playersOwnGoal.p1[1],
+          };
+          const goalCenter = {
+            x: (goalFirstBar.x + goalSecondBar.x) / 2,
+            y: (goalFirstBar.y + goalSecondBar.y) / 2,
+          };
+          const oppositeGoalCenter = {
+            x: goalCenter.x * -1,
+            y: goalCenter.y,
+          };
+          const distanceBetweenGoals = distance(
+            goalCenter.x,
+            goalCenter.y,
+            oppositeGoalCenter.x,
+            oppositeGoalCenter.y,
+          );
+          const distanceToGoal = distance(
+            closestPlayer.position.x,
+            closestPlayer.position.y,
+            goalCenter.x,
+            goalCenter.y,
+          );
+          console.log("kicked pos", kickedPosition);
+          console.log("kicked angle", kickedAngle);
+          console.log("goal", playersOwnGoal);
+          console.log(
+            rayIntersectsSegment(
+              kickedPosition,
+              kickedAngle,
+              goalFirstBar,
+              goalSecondBar,
+            ),
+          );
+          if (
+            distanceToGoal < distanceBetweenGoals / 3 &&
+            rayIntersectsSegment(
+              kickedPosition,
+              kickedAngle,
+              goalFirstBar,
+              goalSecondBar,
+            ).point
+          ) {
+            // room.sendAnnouncement(`Odbrana by: ${closestPlayer.name}`);
+            const { data, error } = await supabase
+              .from("saves")
+              .insert({
+                game_id: currentGameId,
+                time: room.getScores().time,
+                player_id: closestPlayer.name,
+              })
+              .select();
+
+            console.log("saves", data, "saves error", error);
+            lastEmojiChangePlayerId = closestPlayer.id;
+            room.setPlayerAvatar(closestPlayer.id, "🙌");
+            setTimeout(() => {
+              room.setPlayerAvatar(lastEmojiChangePlayerId, null);
+            }, 1000);
+          }
+        } else {
+          isBallKicked = false;
+        }
+      }
+    }
+
     ballPositionForSpeed = room.getBallPosition();
     if (tick % GAME_TICK_DIVIDER === 0) {
       const ballPosition = room.getBallPosition();
@@ -105,6 +271,7 @@ HaxballJS().then((HBInit) => {
   };
 
   let currentGameId = undefined;
+  let lastEmojiChangePlayerId = undefined;
   let heatmap = [];
 
   room.onGameStart = async () => {
@@ -128,6 +295,7 @@ HaxballJS().then((HBInit) => {
   };
 
   room.onTeamGoal = async (team: TeamID) => {
+    isBallKicked = false;
     if (!lastKickedPlayer?.name) {
       return;
     }
@@ -151,14 +319,16 @@ HaxballJS().then((HBInit) => {
         currentBallPosition.y,
       ) * SHOT_DISTANCE_MULTIPLIER;
 
-    const playerAnnouncement = `Goal by: ${lastKickedPlayer.name}`;
+    room.setPlayerAvatar(lastKickedPlayer.id, "⚽");
+
+    // const playerAnnouncement = `Goal by: ${lastKickedPlayer.name}`;
     const ballSpeedAnnouncement = `Ball speed: ${ballPositionDifference.toFixed(0)} km/h; distance: ${lastKickedPlayerDifference.toFixed(0)} meters`;
-    room.sendAnnouncement(
-      playerAnnouncement,
-      undefined,
-      team === 1 ? 0xec3838 : 0x2a9ff8,
-    );
-    room.sendAnnouncement(ballSpeedAnnouncement, undefined, 0xffffff);
+    // room.sendAnnouncement(
+    //   playerAnnouncement,
+    //   undefined,
+    //   team === 1 ? 0xec3838 : 0x2a9ff8,
+    // );
+    // room.sendAnnouncement(ballSpeedAnnouncement, undefined, 0xffffff);
 
     await supabase
       .from("players")
@@ -191,11 +361,18 @@ HaxballJS().then((HBInit) => {
     console.log("goal data", data, "goal error", error);
   };
 
-  let currentMapName = "Big";
+  let currentMapName = "WFL | MEDIUM";
 
   room.onStadiumChange = (newStadiumName: string) => {
     console.log("set new map:", newStadiumName);
     currentMapName = newStadiumName;
+  };
+
+  room.onPositionsReset = () => {
+    lastEmojiChangePlayerId = undefined;
+    room.getPlayerList().forEach((player: PlayerObject) => {
+      room.setPlayerAvatar(player.id, null);
+    });
   };
 
   room.onTeamVictory = async (scores: ScoresObject) => {

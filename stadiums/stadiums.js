@@ -1697,4 +1697,21 @@ const stadium3v3 = {
 const stringified2v2Stadium = JSON.stringify(stadium2v2);
 const stringified3v3Stadium = JSON.stringify(stadium3v3);
 
-module.exports = { stringified2v2Stadium, stringified3v3Stadium };
+const getGoalForStadiumAndTeam = (stadiumName, teamName) => {
+  let stadiums = [stadium3v3, stadium2v2];
+  let goal = undefined;
+  stadiums.forEach((stadium) => {
+    if (stadium.name === stadiumName) {
+      goal = stadium.goals.find((goal) => {
+        return goal.team === teamName;
+      });
+    }
+  });
+  return goal;
+};
+
+module.exports = {
+  stringified2v2Stadium,
+  stringified3v3Stadium,
+  getGoalForStadiumAndTeam,
+};
