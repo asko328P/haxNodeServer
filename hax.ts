@@ -97,6 +97,12 @@ HaxballJS().then((HBInit) => {
     return closestPlayer;
   }
 
+  const resetAvatars = () => {
+    room.getPlayerList().forEach((player: PlayerObject) => {
+      room.setPlayerAvatar(player.id, null);
+    });
+  };
+
   // Same as in Haxball Headless Host Documentation
   const room = HBInit({
     roomName: "Misija",
@@ -241,7 +247,7 @@ HaxballJS().then((HBInit) => {
             lastEmojiChangePlayerId = closestPlayer.id;
             room.setPlayerAvatar(closestPlayer.id, "🙌");
             setTimeout(() => {
-              room.setPlayerAvatar(lastEmojiChangePlayerId, null);
+              resetAvatars();
             }, 1000);
           }
         } else {
@@ -370,9 +376,7 @@ HaxballJS().then((HBInit) => {
 
   room.onPositionsReset = () => {
     lastEmojiChangePlayerId = undefined;
-    room.getPlayerList().forEach((player: PlayerObject) => {
-      room.setPlayerAvatar(player.id, null);
-    });
+    resetAvatars();
   };
 
   room.onTeamVictory = async (scores: ScoresObject) => {
