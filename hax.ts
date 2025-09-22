@@ -68,7 +68,9 @@ HaxballJS().then((HBInit) => {
 
   function getPlayerClosestToBall() {
     const currentBallPosition = room.getBallPosition();
-    let closestPlayer: PlayerObject = room.getPlayerList()[0];
+    let closestPlayer: PlayerObject = room.getPlayerList().find((player) => {
+      return player.position?.x;
+    });
 
     let closestDistance = distance(
       closestPlayer.position.x,
@@ -77,6 +79,9 @@ HaxballJS().then((HBInit) => {
       currentBallPosition.y,
     );
     room.getPlayerList().forEach((player: PlayerObject) => {
+      if (!player?.position?.x) {
+        return;
+      }
       if (
         distance(
           player.position.x,
