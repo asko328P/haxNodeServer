@@ -236,7 +236,7 @@ HaxballJS().then((HBInit) => {
               kickedAngle,
               goalFirstBar,
               goalSecondBar,
-            ).point
+            )?.point
           ) {
             // room.sendAnnouncement(`Odbrana by: ${closestPlayer.name}`);
             const { data, error } = await supabase
