@@ -66,11 +66,16 @@ HaxballJS().then((HBInit) => {
     );
   };
 
-  function getPlayerClosestToBall() {
+  const getPlayerClosestToBall = (): PlayerObject => {
     const currentBallPosition = room.getBallPosition();
-    let closestPlayer: PlayerObject = room.getPlayerList().find((player) => {
-      return player.position?.x;
+
+    let tempPlayerList = room.getPlayerList().filter((player) => {
+      return player.team !== 0;
     });
+
+    if (tempPlayerList.length === 0) return undefined;
+
+    let closestPlayer = tempPlayerList[0];
 
     let closestDistance = distance(
       closestPlayer.position.x,
@@ -100,7 +105,7 @@ HaxballJS().then((HBInit) => {
       }
     });
     return closestPlayer;
-  }
+  };
 
   const resetAvatars = () => {
     room.getPlayerList().forEach((player: PlayerObject) => {
@@ -170,10 +175,13 @@ HaxballJS().then((HBInit) => {
         currentBallPosition.x,
         currentBallPosition.y,
       );
-      if (Math.abs(kickedAngle - currentTrajectoryAngle) > EPSILON) {
+      const closestPlayer = getPlayerClosestToBall();
+      if (
+        Math.abs(kickedAngle - currentTrajectoryAngle) > EPSILON &&
+        closestPlayer
+      ) {
         // room.sendAnnouncement(`ball changed trajectory`);
 
-        const closestPlayer = getPlayerClosestToBall();
         const closestPlayerBallDistance = distance(
           closestPlayer.position.x,
           closestPlayer.position.y,
@@ -243,7 +251,7 @@ HaxballJS().then((HBInit) => {
               .from("saves")
               .insert({
                 game_id: currentGameId,
-                time: room.getScores().time,
+                time: room.getScores()?.time ?? 0,
                 player_id: closestPlayer.name,
               })
               .select();
@@ -354,7 +362,7 @@ HaxballJS().then((HBInit) => {
       player_id: lastKickedPlayer.name,
       goal_for_team_id: team,
       is_own_goal: isOwnGoal,
-      time: room.getScores().time,
+      time: room.getScores()?.time ?? 0,
 
       assist_player_id:
         beforeLastKickedPlayer?.team === team &&
