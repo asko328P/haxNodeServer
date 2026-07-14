@@ -22,6 +22,12 @@ const KICKED_SPEED_THRESHOLD = 110;
 const EPSILON = 0.1;
 const GOALIE_TO_BALL_DISTANCE = 36;
 
+// Base colors for teams (Standard Haxball Red & Blue)
+const BASE_COLORS = {
+  1: 0xe56e56, // Red
+  2: 0x5689e5, // Blue
+};
+
 const supabase = createClient(
   process.env.SUPABASE_URL,
   process.env.SUPABASE_SERVICE_KEY,
@@ -34,13 +40,63 @@ const supabase = createClient(
 );
 
 HaxballJS().then((HBInit) => {
+  // Track team composition and win streaks for color brightening
+  const teamRosters = {
+    1: { roster: "", wins: 0 },
+    2: { roster: "", wins: 0 },
+  };
+
+  // Helper: Get a sorted, comma-separated string of player names on a team
+  const getTeamRosterString = (teamId: number) => {
+    return room
+      .getPlayerList()
+      .filter((player) => player.team === teamId)
+      .map((player) => player.name)
+      .sort()
+      .join(",");
+  };
+
+  // Helper: Brighten an RGB hex color toward white (255, 255, 255) based on win count
+  const getDarkenedColor = (baseColorHex: number, winCount: number) => {
+    if (winCount === 0) return baseColorHex;
+
+    let r = (baseColorHex >> 16) & 255;
+    let g = (baseColorHex >> 8) & 255;
+    let b = baseColorHex & 255;
+
+    // Darken by 15% per win, capped at 85% so it doesn't become pitch black
+    const factor = Math.min(0.85, winCount * 0.15);
+
+    r = Math.round(r * (1 - factor));
+    g = Math.round(g * (1 - factor));
+    b = Math.round(b * (1 - factor));
+
+    return (r << 16) | (g << 8) | b;
+  };
+
+  // Helper: Apply the calculated color to a team in the room
+  const updateTeamColor = (teamId: number, winCount: number) => {
+    const color = getDarkenedColor(BASE_COLORS[teamId], winCount);
+    room.setTeamColors(teamId, 60, 0xffffff, [color]);
+  };
+
+  // Helper: Check if team compositions changed and reset colors if necessary
+  const checkAndResetTeamCompositions = () => {
+    [1, 2].forEach((teamId) => {
+      const currentRoster = getTeamRosterString(teamId);
+      if (currentRoster !== teamRosters[teamId].roster) {
+        teamRosters[teamId].roster = currentRoster;
+        teamRosters[teamId].wins = 0;
+        updateTeamColor(teamId, 0); // Reset to base Red / Blue
+      }
+    });
+  };
+
   // If there are no admins left in the room give admin to one of the remaining players.
   function updateAdmins() {
-    // Get all players
     var players = room.getPlayerList();
     if (players.length == 0) return; // No players left, do nothing.
 
-    //find fiaskoza! and give him an admin
     players.forEach((player) => {
       if (player.name == "fiaskoza!") {
         room.setPlayerAdmin(player.id, true);
@@ -113,7 +169,6 @@ HaxballJS().then((HBInit) => {
     });
   };
 
-  // Same as in Haxball Headless Host Documentation
   const room = HBInit({
     roomName: "Misija",
     maxPlayers: 16,
@@ -125,6 +180,10 @@ HaxballJS().then((HBInit) => {
   room.setCustomStadium(stringified2v2Stadium);
   room.setScoreLimit(3);
   room.setTimeLimit(3);
+
+  // Initialize default team colors when the room opens
+  updateTeamColor(1, 0);
+  updateTeamColor(2, 0);
 
   room.onRoomLink = async (link) => {
     console.log(link);
@@ -142,6 +201,11 @@ HaxballJS().then((HBInit) => {
 
   room.onPlayerLeave = function () {
     updateAdmins();
+    checkAndResetTeamCompositions(); // Reset color if a player leaves their team
+  };
+
+  room.onPlayerTeamChange = function () {
+    checkAndResetTeamCompositions(); // Reset color immediately if someone swaps teams in lobby
   };
 
   let tick = GAME_TICK_DIVIDER;
@@ -157,7 +221,6 @@ HaxballJS().then((HBInit) => {
 
     if (getBallSpeed() > KICKED_SPEED_THRESHOLD && !isBallKicked) {
       isBallKicked = true;
-      // room.sendAnnouncement(`ball is kicked!`);
 
       kickedAngle = angle(
         ballPositionForSpeed.x,
@@ -180,8 +243,6 @@ HaxballJS().then((HBInit) => {
         Math.abs(kickedAngle - currentTrajectoryAngle) > EPSILON &&
         closestPlayer
       ) {
-        // room.sendAnnouncement(`ball changed trajectory`);
-
         const closestPlayerBallDistance = distance(
           closestPlayer.position.x,
           closestPlayer.position.y,
@@ -190,10 +251,7 @@ HaxballJS().then((HBInit) => {
         );
 
         if (closestPlayerBallDistance < GOALIE_TO_BALL_DISTANCE) {
-          // room.sendAnnouncement(`closes player is ${closestPlayer.name}`);
-
           isBallKicked = false;
-          //now we need to check whether the ball was going towards the goal. we got the kicked position and we got the kicked angle.
           const playersOwnGoal = getGoalForStadiumAndTeam(
             currentMapName,
             closestPlayer.team === 1 ? "red" : "blue",
@@ -246,7 +304,6 @@ HaxballJS().then((HBInit) => {
               goalSecondBar,
             )?.point
           ) {
-            // room.sendAnnouncement(`Odbrana by: ${closestPlayer.name}`);
             const { data, error } = await supabase
               .from("saves")
               .insert({
@@ -256,7 +313,6 @@ HaxballJS().then((HBInit) => {
               })
               .select();
 
-            console.log("saves", data, "saves error", error);
             lastEmojiChangePlayerId = closestPlayer.id;
             room.setPlayerAvatar(closestPlayer.id, "🙌");
             setTimeout(() => {
@@ -294,6 +350,9 @@ HaxballJS().then((HBInit) => {
   let heatmap = [];
 
   room.onGameStart = async () => {
+    // Check if rosters changed right as the match starts
+    checkAndResetTeamCompositions();
+
     tick = Math.round(GAME_TICK_DIVIDER / 2); //this is so the starting position is not logged
     heatmap = [];
     room.setTeamsLock(true);
@@ -301,6 +360,7 @@ HaxballJS().then((HBInit) => {
 
     currentGameId = data[0].id;
   };
+
   room.onGameStop = () => {
     room.setTeamsLock(false);
   };
@@ -308,7 +368,6 @@ HaxballJS().then((HBInit) => {
   let beforeLastKickedPlayer = undefined;
   let lastKickedPlayer = undefined;
   room.onPlayerBallKick = (player: PlayerObject) => {
-    //swap the values
     beforeLastKickedPlayer = lastKickedPlayer;
     lastKickedPlayer = player;
   };
@@ -340,14 +399,7 @@ HaxballJS().then((HBInit) => {
 
     room.setPlayerAvatar(lastKickedPlayer.id, "⚽");
 
-    // const playerAnnouncement = `Goal by: ${lastKickedPlayer.name}`;
     const ballSpeedAnnouncement = `Ball speed: ${ballPositionDifference.toFixed(0)} km/h; distance: ${lastKickedPlayerDifference.toFixed(0)} meters`;
-    // room.sendAnnouncement(
-    //   playerAnnouncement,
-    //   undefined,
-    //   team === 1 ? 0xec3838 : 0x2a9ff8,
-    // );
-    // room.sendAnnouncement(ballSpeedAnnouncement, undefined, 0xffffff);
 
     await supabase
       .from("players")
@@ -377,13 +429,11 @@ HaxballJS().then((HBInit) => {
 
     beforeLastKickedPlayer = undefined;
     lastKickedPlayer = undefined;
-    console.log("goal data", data, "goal error", error);
   };
 
   let currentMapName = "WFL | MEDIUM";
 
   room.onStadiumChange = (newStadiumName: string) => {
-    console.log("set new map:", newStadiumName);
     currentMapName = newStadiumName;
   };
 
@@ -393,10 +443,28 @@ HaxballJS().then((HBInit) => {
   };
 
   room.onTeamVictory = async (scores: ScoresObject) => {
+    // 1. Identify winning team
+    const winningTeamId = scores.red > scores.blue ? 1 : 2;
+    const currentRoster = getTeamRosterString(winningTeamId);
+
+    // 2. If roster hasn't changed, increment win count and brighten team colors!
+    if (
+      currentRoster !== "" &&
+      currentRoster === teamRosters[winningTeamId].roster
+    ) {
+      teamRosters[winningTeamId].wins += 1;
+    } else {
+      teamRosters[winningTeamId].roster = currentRoster;
+      teamRosters[winningTeamId].wins = 1;
+    }
+
+    // Apply the brightened color immediately so it appears on the victory screen
+    updateTeamColor(winningTeamId, teamRosters[winningTeamId].wins);
+
     await supabase.from("games").upsert({
       id: currentGameId,
       ended_at: new Date().toISOString(),
-      winning_team_id: scores.red > scores.blue ? 1 : 2,
+      winning_team_id: winningTeamId,
       time: scores.time,
     });
 
@@ -418,8 +486,6 @@ HaxballJS().then((HBInit) => {
       heatmap: heatmap,
       map_name: currentMapName,
     });
-
-    console.log("heatmapError", heatmapError);
 
     room.sendAnnouncement(
       `View replays and stats at: https://haxstats.expo.app/`,
